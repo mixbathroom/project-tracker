@@ -116,6 +116,8 @@ body.is-login header{display:none}
 .lg input:focus,.lg select:focus{border-color:#8E92F0;background:var(--navy);box-shadow:0 0 0 4px rgba(142,146,240,.18)}
 .lg #lgPin{font-size:22px;letter-spacing:8px}
 .lg .errmsg{color:#FF8A8F}
+.lg .invalid{background:#3A1D3E!important;border-color:#FF7A7F!important;box-shadow:0 0 0 4px rgba(255,122,127,.18)!important}
+.lg label.req-bad{color:#FF8A8F}
 .lg-go{margin-top:16px;height:54px;width:100%;border:none;border-radius:12px;background:#fff;color:var(--blue-d);font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .lg-go:hover{background:#ECEDFA;border:none}
 .lg-stat{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
@@ -219,7 +221,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "721295560008",
   appId: "1:721295560008:web:e93eed848c29472732f77d"
 }; // ใส่ null เพื่อกลับไปโหมดทดลอง
-const APP_VERSION = "v1.3.0";  // เลขเวอร์ชัน แสดงที่ header และหน้า Login
+const APP_VERSION = "v1.0.1";  // เลขเวอร์ชัน แสดงที่ header และหน้า Login
 const ADMIN_PIN = "1234";     // PIN สำหรับทีม Sales / Key Account
 const STORE_KEY="beger_projects_v2";
 const STALE_DAYS = 7;         // โครงการไม่อัปเดตเกินกี่วันถือว่าต้องตาม
@@ -260,7 +262,7 @@ const Store = {
         await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
         await loadScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js");
         firebase.initializeApp(FIREBASE_CONFIG);
-        this.db = firebase.firestore(); this.mode="firebase"; return;
+        this.db = firebase.firestore(); try{ this.db.settings({ignoreUndefinedProperties:true,merge:true}); }catch(e){} this.mode="firebase"; return;
       }catch(e){ console.warn("Firebase ไม่พร้อม ใช้โหมดในเครื่อง", e); }
     }
     const c=lsGet(this.key);
@@ -273,10 +275,12 @@ const Store = {
     const admin=user.role==="admin";
     this.key=STORE_KEY+"_cache_"+(admin?"all":user.code);
     let c=lsGet(this.key)||{last:0,items:{}};
+    this.cache=c;
     let q=this.db.collection("projects");
     if(admin){ if(c.last) q=q.where("ts",">",firebase.firestore.Timestamp.fromMillis(c.last)); }
-    else { q=q.where("pcCode","==",user.code); c.items={}; }
+    else { q=q.where("pcCode","==",user.code); }
     const s=await q.get();
+    if(!admin){ c={last:c.last,items:{}}; }
     s.docs.forEach(d=>{const x=d.data(); const ms=x.ts&&x.ts.toMillis?x.ts.toMillis():0; x.ts=ms; x.id=d.id; c.items[d.id]=x; if(ms>c.last)c.last=ms;});
     this.cache=c; this.save(); this.synced=true; this.lastSyncAt=new Date(); this.lastReads=s.size;
   },
@@ -305,17 +309,20 @@ function loadScript(src){return new Promise((ok,no)=>{const s=document.createEle
 /* ================= Helpers ================= */
 const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const today=()=>new Date().toISOString().slice(0,10);
-const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
-const daysBetween=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const pd=s=>{const [y,m,d]=String(s||"").slice(0,10).split("-").map(Number);return new Date(y||1970,(m||1)-1,d||1);};
+const today=()=>ymd(new Date());
+const addDays=(d,n)=>{const x=pd(d);x.setDate(x.getDate()+n);return ymd(x);};
+const daysBetween=(a,b)=>Math.round((pd(b)-pd(a))/864e5);
 const fmt=n=>Math.round(+n||0).toLocaleString("en-US");
 const parseNum=s=>+String(s||"").replace(/[^0-9.]/g,"")||0;
 const fmtM=n=>fmt(n)+'<span class="u">บาท</span>';
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const okImg=s=>typeof s==="string"&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s);
 const st=k=>STATUSES.find(s=>s.k===k)||STATUSES[0];
 const badge=k=>{const s=st(k);return `<span class="badge" style="color:${s.c};background:${s.bg}">${esc(k)}</span>`;};
 const thMonth=ym=>{const m=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];const [y,mm]=ym.split("-");return m[+mm-1]+" "+String(+y+543).slice(2);};
-const thDate=d=>d?new Date(d).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"2-digit"}):"-";
+const thDate=d=>d?pd(d).toLocaleDateString("th-TH",{day:"numeric",month:"short",year:"2-digit"}):"-";
 function toast(t){const e=$("#toast");e.textContent=t;e.style.display="block";clearTimeout(e._t);e._t=setTimeout(()=>e.style.display="none",2200);}
 function openModal(html){$("#modalBox").innerHTML=html;$("#modal").classList.add("show");}
 function closeModal(){$("#modal").classList.remove("show");}
@@ -345,6 +352,7 @@ const pcKey=(c,b,n)=>c+"|"+b+"|"+n;
 /* ================= Session ================= */
 let user=null, view="form", data=[], filt={q:"",chain:"",status:"",pc:"",sup:"",open:"open"};
 try{ user=JSON.parse(sessionStorage.getItem("beger_pt_user")||"null"); }catch(e){}
+if(user&&user.role==="admin") view="dash";
 
 function renderLogin(){
   $("#nav").style.display="none";$("#btnLogout").style.display="none";$("#who").textContent="";
@@ -368,15 +376,27 @@ function renderLogin(){
   let role="pc";
   document.querySelectorAll("#roleChips .chip").forEach(c=>c.onclick=()=>{
     document.querySelectorAll("#roleChips .chip").forEach(x=>x.classList.remove("on"));c.classList.add("on");role=c.dataset.r;
-    $("#pcFields").style.display=role==="pc"?"":"none";$("#adFields").style.display=role==="admin"?"":"none";$("#lgGoTxt").textContent=role==="admin"?"เข้าสู่ Dashboard":"เข้าสู่ระบบ";});
+    $("#pcFields").style.display=role==="pc"?"":"none";$("#adFields").style.display=role==="admin"?"":"none";$("#lgGoTxt").textContent=role==="admin"?"เข้าสู่ Dashboard":"เข้าสู่ระบบ";
+    ["#lgChain","#lgBranch","#lgName","#lgPin"].forEach(id=>markField(id,null));
+    setTimeout(()=>{const f=role==="admin"?$("#lgPin"):null; if(f)f.focus();},50);});
+  document.querySelectorAll(".lg input").forEach(i=>i.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();$("#lgGo").click();}}));
   $("#lgChain").onchange=()=>{$("#lgBranch").value="";$("#lgBrList").innerHTML=(CHAINS[$("#lgChain").value]||[]).map(b=>`<option value="${esc(b)}">`).join("");$("#lgName").innerHTML='<option value="">-- เลือกสาขาก่อน --</option>';};
   $("#lgBranch").oninput=()=>{const sp=supOf($("#lgChain").value,$("#lgBranch").value.trim());
     $("#lgName").innerHTML=sp.p.length?'<option value="">-- เลือกชื่อ --</option>'+sp.p.map(n=>`<option>${esc(n)}</option>`).join(""):'<option value="">-- เลือกสาขาก่อน --</option>';};
   $("#lgGo").onclick=()=>{
+    ["#lgChain","#lgBranch","#lgName","#lgPin"].forEach(id=>markField(id,null));
     if(role==="pc"){const chain=$("#lgChain").value,branch=$("#lgBranch").value.trim(),name=$("#lgName").value;
-      if(!chain)return toast("กรุณาเลือกห้าง"); if(!supOf(chain,branch).p.length)return toast("ไม่พบสาขานี้ กรุณาเลือกจากรายการ"); if(!name)return toast("กรุณาเลือกชื่อ");
+      const bad=[];
+      if(!chain) bad.push(["#lgChain","กรุณาเลือกห้าง"]);
+      if(!branch) bad.push(["#lgBranch","กรุณาเลือกสาขา"]);
+      else if(chain&&!supOf(chain,branch).p.length) bad.push(["#lgBranch","ไม่พบสาขานี้ กรุณาเลือกจากรายการ"]);
+      if(!name) bad.push(["#lgName","กรุณาเลือกชื่อ PC"]);
+      if(bad.length){ bad.forEach(([id,m])=>markField(id,m)); $(bad[0][0]).focus(); return toast(bad.length>1?`ยังเลือกไม่ครบ ${bad.length} ช่อง`:bad[0][1]); }
       user={role,code:pcKey(chain,branch,name),name,chain,branch,sup:supOf(chain,branch).s};}
-    else{ if($("#lgPin").value!==ADMIN_PIN)return toast("PIN ไม่ถูกต้อง");user={role,code:"ADMIN",name:"ทีม Sales"};}
+    else{ const pin=$("#lgPin");
+      if(!pin.value){ markField("#lgPin","กรุณากรอก PIN"); pin.focus(); return toast("กรุณากรอก PIN"); }
+      if(pin.value!==ADMIN_PIN){ pin.value=""; markField("#lgPin","PIN ไม่ถูกต้อง กรุณาลองใหม่"); pin.focus(); return toast("PIN ไม่ถูกต้อง"); }
+      user={role,code:"ADMIN",name:"ทีม Sales"};}
     try{sessionStorage.setItem("beger_pt_user",JSON.stringify(user));}catch(e){}
     view=user.role==="admin"?"dash":"form"; boot();
   };
@@ -430,7 +450,7 @@ function renderForm(edit){
   <div class="flex" style="margin-top:16px"><button class="pri" id="fSave">💾 บันทึก</button>${edit?`<button id="fCancel">ยกเลิก</button>`:""}</div>
   </div>`;
   let photos=[], photosDirty=false;
-  const drawThumbs=()=>{ $("#fThumbs").innerHTML=photos.map(s=>`<img class="thumb" src="${s}">`).join("")+(photos.length?` <button class="sm" id="clrPh">ลบรูป</button>`:"");
+  const drawThumbs=()=>{ $("#fThumbs").innerHTML=photos.filter(okImg).map(s=>`<img class="thumb" src="${esc(s)}" alt="">`).join("")+(photos.length?` <button class="sm" id="clrPh">ลบรูป</button>`:"");
     const c=$("#clrPh"); if(c)c.onclick=()=>{photos=[];photosDirty=true;drawThumbs();}; };
   if(edit&&edit.photoCount) Store.getPhotos(edit.id).then(a=>{photos=a.slice();drawThumbs();}).catch(()=>{$("#fThumbs").innerHTML="";});
   const fillBr=()=>{$("#brList").innerHTML=(CHAINS[$("#fChain").value]||[]).map(b=>`<option value="${b}">`).join("");};
@@ -458,7 +478,7 @@ function renderForm(edit){
     const rec=Object.assign({},edit||{id:uid(),createdAt:now,pcCode:user.code,pcName:user.name,comments:[],history:[]},v,{sup:supOf(v.chain,v.branch).s||"",
       type:$("#fType").value,contact:$("#fContact").value.trim(),phone:$("#fPhone").value.trim(),
       products:[...document.querySelectorAll("#fProd .chip.on")].map(c=>c.textContent),qty:$("#fQty").value.trim(),
-      status,lostReason:status==="แพ้/ยกเลิก"?$("#fLost").value:"",competitor:$("#fComp").value.trim(),note:$("#fNote").value.trim(),photoCount:photos.length,updatedAt:now}); delete rec.photos;
+      status,lostReason:status==="แพ้/ยกเลิก"?$("#fLost").value:"",competitor:$("#fComp").value.trim(),note:$("#fNote").value.trim(),photoCount:photosDirty?photos.length:(edit?(edit.photoCount||0):0),updatedAt:now}); delete rec.photos;
     if(!edit||edit.status!==status) rec.history=(rec.history||[]).concat([{at:now,status,by:user.name}]);
     const btn=$("#fSave"); btn.disabled=true; btn.textContent="กำลังบันทึก...";
     try{ await Store.put(rec); if(photosDirty) await Store.putPhotos(rec.id,photos); }
@@ -497,8 +517,8 @@ function renderList(){
     <input id="q" placeholder="🔍 ค้นหาชื่อโครงการ / ผู้ติดต่อ / สาขา" value="${esc(filt.q)}">
     <select id="fc"><option value="">ทุกห้าง</option>${Object.keys(CHAINS).map(c=>`<option ${filt.chain===c?"selected":""}>${c}</option>`).join("")}</select>
     <select id="fs"><option value="">ทุกสถานะ</option>${STATUSES.map(s=>`<option ${filt.status===s.k?"selected":""}>${s.k}</option>`).join("")}</select>
-    ${user.role==="admin"?`<select id="fsup"><option value="">ทุกซุป</option>${[...new Set(data.map(p=>p.sup).filter(Boolean))].sort().map(s=>`<option ${filt.sup===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
-    ${user.role==="admin"?`<select id="fp"><option value="">ทุก PC</option>${pcs.map(([c,n])=>`<option value="${c}" ${filt.pc===c?"selected":""}>${esc(n)} · ${esc(c.split("|")[1])}</option>`).join("")}</select>`:""}
+    ${user.role==="admin"?`<select id="fsup"><option value="">ทุกซุป</option>${[...new Set(data.map(p=>p.sup).filter(Boolean))].sort().map(s=>`<option value="${esc(s)}" ${filt.sup===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
+    ${user.role==="admin"?`<select id="fp"><option value="">ทุก PC</option>${pcs.map(([c,n])=>`<option value="${esc(c)}" ${filt.pc===c?"selected":""}>${esc(n)} · ${esc(c.split("|")[1])}</option>`).join("")}</select>`:""}
     <select id="fo"><option value="open" ${filt.open==="open"?"selected":""}>เฉพาะที่ยังเปิดอยู่</option><option value="all" ${filt.open==="all"?"selected":""}>ทั้งหมด</option></select>
   </div><div id="listBody"></div></div>`;
   const bind=(id,k)=>{const e=$(id);if(e)e.oninput=()=>{filt[k]=e.value;drawList();};};
@@ -507,9 +527,9 @@ function renderList(){
 }
 function drawList(){
   const rows=filtered(); const sum=rows.reduce((a,p)=>a+(+p.value||0),0);
-  $("#listBody").innerHTML=`<p class="mute">${fmt(rows.length)} โครงการ · มูลค่ารวม <b style="color:#fff">${fmt(sum)}</b> บาท</p>
+  $("#listBody").innerHTML=`<p class="mute">${fmt(rows.length)} โครงการ · มูลค่ารวม <b style="color:var(--ink)">${fmt(sum)}</b> บาท</p>
   <div class="tbl"><table class="cards"><thead><tr><th>โครงการ</th><th>ห้าง/สาขา</th>${user.role==="admin"?"<th>PC</th>":""}<th class="num">มูลค่า (บาท)</th><th>คาดสั่ง</th><th>สถานะ</th><th>อัปเดต</th></tr></thead><tbody>
-  ${rows.map(p=>`<tr style="cursor:pointer" data-id="${p.id}"><td><b>${esc(p.name)}</b><div class="mute">${esc(p.type)} · ${esc(p.contact)}</div></td>
+  ${rows.map(p=>`<tr style="cursor:pointer" data-id="${esc(p.id)}"><td><b>${esc(p.name)}</b><div class="mute">${esc(p.type)} · ${esc(p.contact)}</div></td>
   <td class="c-shop">${esc(p.chain)}<div class="mute">${esc(p.branch)}</div></td>${user.role==="admin"?`<td class="c-pc" data-l="PC">${esc(p.pcName)}</td>`:""}
   <td class="num c-val" data-l="มูลค่า">${fmt(p.value)} <span class="mute">บาท</span></td><td class="c-exp" data-l="คาดสั่ง">${thDate(p.expectDate)}</td><td class="c-st">${badge(p.status)}</td><td class="mute c-upd">${daysBetween(p.updatedAt,today())} วันก่อน</td></tr>`).join("")||`<tr><td colspan="7" class="mute">ไม่พบข้อมูล</td></tr>`}
   </tbody></table></div>`;
@@ -541,8 +561,12 @@ function showDetail(id){
   <div class="flex"><input id="dCm" placeholder="พิมพ์ข้อความ เช่น ส่งใบเสนอราคาแล้ว" style="flex:1"><button id="dCmGo">ส่ง</button></div>
   <h2 style="margin-top:14px">🕑 ประวัติสถานะ</h2>
   ${(p.history||[]).slice().reverse().map(h=>`<div class="hist">${thDate(h.at)} · ${badge(h.status)} <span class="mute">โดย ${esc(h.by)}</span></div>`).join("")}`);
-  if(p.photoCount) Store.getPhotos(p.id).then(a=>{const d=$("#dPh");if(d)d.innerHTML=a.map(s=>`<img class="thumb" src="${s}">`).join("");}).catch(()=>{});
-  const upd=async(ch,msg)=>{Object.assign(p,ch,{updatedAt:today()});try{await Store.put(p);}catch(e){return toast("บันทึกไม่สำเร็จ");}toast(msg);closeModal();boot();};
+  if(p.photoCount) Store.getPhotos(p.id).then(a=>{const d=$("#dPh");if(d)d.innerHTML=a.filter(okImg).map(s=>`<img class="thumb" src="${esc(s)}" alt="">`).join("");}).catch(()=>{});
+  let busy=false;
+  const upd=async(ch,msg)=>{ if(busy)return; busy=true; document.querySelectorAll("#modalBox button").forEach(b=>b.disabled=true);
+    const prev=JSON.parse(JSON.stringify(p)); Object.assign(p,ch,{updatedAt:today()});
+    try{await Store.put(p);}catch(e){ Object.keys(p).forEach(k=>delete p[k]); Object.assign(p,prev); busy=false; document.querySelectorAll("#modalBox button").forEach(b=>b.disabled=false); return toast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง");}
+    toast(msg);closeModal();boot();};
   if(canEdit){
     if(next)$("#dNext").onclick=()=>upd({status:next,history:p.history.concat([{at:today(),status:next,by:user.name}])},"อัปเดตสถานะแล้ว");
     $("#dLost").onclick=()=>{
@@ -550,7 +574,7 @@ function showDetail(id){
       $("#dLrGo").onclick=()=>upd({status:"แพ้/ยกเลิก",lostReason:$("#dLr").value,history:p.history.concat([{at:today(),status:"แพ้/ยกเลิก",by:user.name}])},"บันทึกแล้ว");
     };
     $("#dEdit").onclick=()=>{closeModal();view="form";$("#nav").querySelectorAll("button").forEach(b=>b.classList.toggle("on",b.dataset.v==="form"));renderForm(p);};
-    $("#dDel").onclick=()=>{ if($("#dDel").dataset.c){Store.del(p.id).then(()=>{toast("ลบแล้ว");closeModal();boot();});} else {$("#dDel").dataset.c=1;$("#dDel").textContent="กดอีกครั้งเพื่อยืนยันลบ";} };
+    $("#dDel").onclick=()=>{ if($("#dDel").dataset.c){$("#dDel").disabled=true; Store.del(p.id).then(()=>{toast("ลบแล้ว");closeModal();boot();}).catch(()=>{$("#dDel").disabled=false;toast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง");});} else {$("#dDel").dataset.c=1;$("#dDel").textContent="กดอีกครั้งเพื่อยืนยันลบ";} };
   }
   $("#dCmGo").onclick=()=>{const t=$("#dCm").value.trim();if(!t)return;upd({comments:(p.comments||[]).concat([{at:today(),by:user.name,text:t}])},"ส่งความคิดเห็นแล้ว");};
 }
@@ -570,7 +594,7 @@ function renderFollow(){
   const L=followList();
   $("#app").innerHTML=`<div class="card"><h2>⏰ โครงการที่ต้องตามด่วน (${L.length})</h2>
   <p class="mute">เงื่อนไข: ใกล้วันคาดสั่งซื้อภายใน ${SOON_DAYS} วัน, เลยวันคาดสั่งซื้อแล้ว หรือไม่อัปเดตเกิน ${STALE_DAYS} วัน</p></div>
-  ${L.map(({p,r})=>`<div class="card ${r.some(x=>x.lv==="bad")?"alert bad":"alert"}" style="cursor:pointer" data-id="${p.id}">
+  ${L.map(({p,r})=>`<div class="card ${r.some(x=>x.lv==="bad")?"alert bad":"alert"}" style="cursor:pointer" data-id="${esc(p.id)}">
     <div class="flex"><b>${esc(p.name)}</b> ${badge(p.status)}<span class="right"><b>${fmt(p.value)}</b> บาท</span></div>
     <div class="mute">${esc(p.chain)} · ${esc(p.branch)} · ${esc(p.pcName)} · ${esc(p.contact)} ${esc(p.phone)}</div>
     <div style="margin-top:6px">${r.map(x=>`⚠️ ${x.t}`).join(" &nbsp; ")}</div></div>`).join("")||`<div class="card mute">ไม่มีโครงการค้าง 🎉</div>`}`;
@@ -578,7 +602,7 @@ function renderFollow(){
 }
 
 /* ================= Dashboard ================= */
-function bars(items,fmtv){const mx=Math.max(1,...items.map(i=>i.v));return `<div class="bars">${items.map(i=>`<div class="row"><span>${i.l}</span><div class="track"><div class="fill" style="width:${i.v/mx*100}%;background:${i.c||"var(--pri)"}"></div></div><span class="val">${fmtv?fmtv(i.v):fmt(i.v)}</span></div>`).join("")||'<p class="mute">ไม่มีข้อมูล</p>'}</div>`;}
+function bars(items,fmtv){const mx=Math.max(1,...items.map(i=>i.v));return `<div class="bars">${items.map(i=>`<div class="row"><span>${esc(i.l)}</span><div class="track"><div class="fill" style="width:${i.v/mx*100}%;background:${i.c||"var(--pri)"}"></div></div><span class="val">${fmtv?fmtv(i.v):fmt(i.v)}</span></div>`).join("")||'<p class="mute">ไม่มีข้อมูล</p>'}</div>`;}
 function renderDash(){
   const D=mine();
   const open=D.filter(p=>OPEN.includes(p.status)), won=D.filter(p=>WON.includes(p.status)), lost=D.filter(p=>p.status==="แพ้/ยกเลิก");
@@ -590,8 +614,8 @@ function renderDash(){
   // by chain (open pipeline)
   const byChain=Object.keys(CHAINS).map(c=>({l:c,v:sum(open.filter(p=>p.chain===c))})).filter(x=>x.v).sort((a,b)=>b.v-a.v);
   // forecast next 6 months (weighted, open + won not yet delivered)
-  const months=[];const d0=new Date();d0.setDate(1);
-  for(let i=-1;i<6;i++){const d=new Date(d0);d.setMonth(d.getMonth()+i);months.push(d.toISOString().slice(0,7));}
+  const months=[];const n0=new Date();
+  for(let i=-1;i<6;i++){const d=new Date(n0.getFullYear(),n0.getMonth()+i,1);months.push(ymd(d).slice(0,7));}
   const fc=months.map(m=>{const ps=D.filter(p=>(p.expectDate||"").slice(0,7)===m&&!["แพ้/ยกเลิก"].includes(p.status));
     return {l:thMonth(m),v:ps.reduce((s,p)=>s+(+p.value||0)*st(p.status).w,0),full:sum(ps)};});
   // by PC
