@@ -155,11 +155,47 @@ label.req-bad{color:var(--bad)}
   table.cards .c-exp,table.cards .c-pc{font-size:13px}table.cards .c-upd{text-align:right;font-size:12px}
   table.cards td[data-l]::before{content:attr(data-l) " ";color:var(--mute);font-size:12px;font-weight:400}
 }
+
+/* ===== Theme 3 · Blue Hero ===== */
+:root{--bg:#F3F4FA;--ink:#16193F;--mute:#5A5F80;--line:#E3E5F0;--sh:0 1px 2px rgba(22,25,63,.05),0 8px 24px rgba(22,25,63,.08)}
+body{overflow-x:hidden}
+header{background:#2E3192;box-shadow:none}
+header::after{display:none}
+header .who{background:rgba(255,255,255,.16)}
+nav{background:#2E3192;backdrop-filter:none}
+nav button{background:rgba(255,255,255,.12);color:#E4E5F7;border-color:transparent;box-shadow:none}
+nav button:hover{color:#fff;background:rgba(255,255,255,.2)}
+nav button.on{background:#fff;color:#2E3192;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+nav button.on .mute{color:#5A5F80!important}
+nav .mute{color:#C9CBF0!important}
+.ver{font-size:11px;font-weight:300;color:rgba(255,255,255,.45);letter-spacing:.3px;margin-left:6px;vertical-align:middle}
+.lg-ver{position:absolute;top:14px;right:18px;font-size:11px;font-weight:300;color:rgba(255,255,255,.35);letter-spacing:.3px}
+.lg{position:relative}
+.hero{margin:-18px calc(50% - 50vw) 0;background:#2E3192;color:#fff;padding:18px 20px 76px}
+.hero-in{max-width:1180px;margin:0 auto;padding:0 20px;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.hero .lbl{font-size:13px;color:#C9CBF0}
+.hero .big{font-size:40px;font-weight:700;letter-spacing:-.5px;line-height:1.15}
+.hero .big .u{font-size:16px;font-weight:400;color:#C9CBF0;margin-left:6px}
+.hero .bar{height:4px;width:48px;border-radius:2px;background:var(--red);margin-top:10px}
+.hero .side{display:flex;gap:22px;font-size:13px;color:#C9CBF0}
+.hero .side b{display:block;font-size:18px;color:#fff;font-weight:600}
+.kpis.lift{margin-top:-58px;position:relative}
+.kpi::before{display:none}
+.kpi{border:none}
+@media(max-width:640px){
+  .hero{margin-top:-12px;padding:14px 4px 64px}
+  .hero .big{font-size:32px}
+  .hero .side{display:none}
+  .kpis.lift{margin-top:-50px}
+  nav{background:#fff}
+  nav button,nav button:hover{background:transparent;color:#6A6F90}
+  nav button.on{background:var(--red);color:#fff;box-shadow:0 4px 12px rgba(237,27,36,.3)}
+}
 </style>
 </head>
 <body>
 <header>
-  <div class="brand"><span class="logo" role="img" aria-label="สีเบเยอร์ Beger"></span><h1>Project Tracker<small>ระบบบันทึกและติดตามงานโครงการ · MDT</small></h1></div>
+  <div class="brand"><span class="logo" role="img" aria-label="สีเบเยอร์ Beger"></span><h1>Project Tracker<span class="ver" id="hdrVer"></span><small>ระบบบันทึกและติดตามงานโครงการ · MDT</small></h1></div>
   <span class="who" id="who"></span>
   <button class="sm" id="btnLogout" style="display:none">ออกจากระบบ</button>
 </header>
@@ -183,6 +219,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "721295560008",
   appId: "1:721295560008:web:e93eed848c29472732f77d"
 }; // ใส่ null เพื่อกลับไปโหมดทดลอง
+const APP_VERSION = "v1.3.0";  // เลขเวอร์ชัน แสดงที่ header และหน้า Login
 const ADMIN_PIN = "1234";     // PIN สำหรับทีม Sales / Key Account
 const STORE_KEY="beger_projects_v2";
 const STALE_DAYS = 7;         // โครงการไม่อัปเดตเกินกี่วันถือว่าต้องตาม
@@ -314,7 +351,7 @@ function renderLogin(){
   document.body.classList.add("is-login");
   const nPC=Object.values(MASTER).reduce((a,c)=>a+Object.values(c).reduce((x,b)=>x+b.p.length,0),0);
   const nBr=Object.values(MASTER).reduce((a,c)=>a+Object.keys(c).length,0);
-  $("#app").innerHTML=`<div class="lg">
+  $("#app").innerHTML=`<div class="lg"><span class="lg-ver">${APP_VERSION}</span>
     <div class="lg-hero"><span class="logo" role="img" aria-label="สีเบเยอร์ Beger"></span>
       <div><h1>Project Tracker</h1><p>ระบบบันทึกงานโครงการ · Modern Trade</p></div></div>
     <div class="lg-card">
@@ -347,6 +384,7 @@ function renderLogin(){
 $("#btnLogout").onclick=()=>{user=null;Store.synced=false;try{sessionStorage.removeItem("beger_pt_user");}catch(e){}renderLogin();};
 
 async function boot(){
+  const hv=$("#hdrVer"); if(hv) hv.textContent=APP_VERSION;
   if(!user)return renderLogin();
   document.body.classList.remove("is-login");
   if(!Store.synced){ try{ await Store.sync(); }catch(e){ console.error(e); toast("โหลดข้อมูลไม่สำเร็จ ใช้ข้อมูลล่าสุดในเครื่อง"); } }
@@ -469,7 +507,7 @@ function renderList(){
 }
 function drawList(){
   const rows=filtered(); const sum=rows.reduce((a,p)=>a+(+p.value||0),0);
-  $("#listBody").innerHTML=`<p class="mute">${fmt(rows.length)} โครงการ · มูลค่ารวม <b style="color:var(--ink)">${fmt(sum)}</b> บาท</p>
+  $("#listBody").innerHTML=`<p class="mute">${fmt(rows.length)} โครงการ · มูลค่ารวม <b style="color:#fff">${fmt(sum)}</b> บาท</p>
   <div class="tbl"><table class="cards"><thead><tr><th>โครงการ</th><th>ห้าง/สาขา</th>${user.role==="admin"?"<th>PC</th>":""}<th class="num">มูลค่า (บาท)</th><th>คาดสั่ง</th><th>สถานะ</th><th>อัปเดต</th></tr></thead><tbody>
   ${rows.map(p=>`<tr style="cursor:pointer" data-id="${p.id}"><td><b>${esc(p.name)}</b><div class="mute">${esc(p.type)} · ${esc(p.contact)}</div></td>
   <td class="c-shop">${esc(p.chain)}<div class="mute">${esc(p.branch)}</div></td>${user.role==="admin"?`<td class="c-pc" data-l="PC">${esc(p.pcName)}</td>`:""}
@@ -568,8 +606,8 @@ function renderDash(){
   const comp={};D.forEach(p=>{const c=(p.competitor||"").split(/[ ,]/)[0];if(c)comp[c]=(comp[c]||0)+1;});
 
   $("#app").innerHTML=`
-  <div class="kpis">
-    <div class="kpi"><div class="l">Pipeline ที่ยังเปิด</div><div class="v">${fmtM(sum(open))}</div><div class="s">${open.length} โครงการ</div></div>
+  <div class="hero"><div class="hero-in"><div><div class="lbl">Pipeline ที่ยังเปิด · ${fmt(open.length)} โครงการ</div><div class="big">${fmt(sum(open))}<span class="u">บาท</span></div><div class="bar"></div></div></div></div>
+  <div class="kpis lift">
     <div class="kpi"><div class="l">Forecast ถ่วงน้ำหนัก</div><div class="v">${fmtM(weighted)}</div><div class="s">มูลค่า × โอกาสตามสถานะ</div></div>
     <div class="kpi"><div class="l">ปิดการขายได้</div><div class="v" style="color:var(--ok)">${fmtM(sum(won))}</div><div class="s">${won.length} โครงการ</div></div>
     <div class="kpi"><div class="l">Win rate</div><div class="v">${winRate.toFixed(0)}%</div><div class="s">ชนะ ${won.length} / แพ้ ${lost.length}</div></div>
